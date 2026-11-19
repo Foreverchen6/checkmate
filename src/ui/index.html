@@ -21,6 +21,13 @@
             aria-label="中国象棋棋盘"
           ></svg>
         </div>
+        <div class="quick-actions">
+          <button id="undo" title="回退一步（推演中为上一步）">悔棋</button>
+          <button id="sim-prev" hidden title="回到推演中的上一步">上一步</button>
+          <button id="sim-next" hidden title="重走已回退的推演着法">下一步</button>
+          <button id="hint" title="提示：再次点击关闭">提示</button>
+          <button id="simulate" title="进入推演">推演</button>
+        </div>
         <div class="statusbar">
           <div class="status-main">
             <span id="turn" class="turn red">红方行棋</span>
@@ -50,18 +57,36 @@
 
         <div class="row">
           <button id="new-game">新局</button>
-          <button id="undo">悔棋</button>
-          <button id="hint">提示</button>
-        </div>
-
-        <div class="row">
           <button id="resign">认输</button>
           <button id="review">复盘</button>
           <button id="restart-engine" class="ghost" title="重启引擎">↻</button>
           <button id="retry" class="ghost" hidden>重试</button>
         </div>
 
+        <div class="row">
+          <button id="save" title="保存当前对局">保存</button>
+          <button id="load" title="载入存档">载入</button>
+          <button id="import-fen" title="导入 FEN 局面">导入局面</button>
+        </div>
+
         <p id="record" class="record"></p>
+
+        <details id="archive-panel">
+          <summary>存档</summary>
+          <div class="row">
+            <button id="export-game">导出对局…</button>
+            <button id="import-file">从文件载入…</button>
+          </div>
+          <div id="archive-list" class="archive-list"></div>
+        </details>
+
+        <details id="shortcut-panel">
+          <summary>快捷键</summary>
+          <div id="shortcut-list" class="shortcut-list"></div>
+          <div class="row">
+            <button id="reset-shortcuts">恢复默认</button>
+          </div>
+        </details>
 
         <details id="moves-panel">
           <summary>棋谱</summary>
@@ -73,6 +98,24 @@
           <div id="review-body" class="review-body"></div>
         </details>
       </aside>
+    </div>
+
+    <div id="fen-modal" class="modal" hidden>
+      <div class="modal-box">
+        <h2>导入局面</h2>
+        <p class="muted">粘贴 FEN 后从该局面开始新对局。</p>
+        <textarea
+          id="fen-input"
+          rows="4"
+          spellcheck="false"
+          placeholder="rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1"
+        ></textarea>
+        <p id="fen-error" class="modal-error"></p>
+        <div class="modal-actions">
+          <button id="fen-cancel" class="ghost">取消</button>
+          <button id="fen-confirm">开始</button>
+        </div>
+      </div>
     </div>
     <script src="./app.js"></script>
   </body>

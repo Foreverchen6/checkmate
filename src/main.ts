@@ -35,18 +35,18 @@ function printReview(report: ReviewReport): void {
   for (const move of report.moves) {
     console.log(
       `第 ${move.ply} 手 ${move.side === 'red' ? '红' : '黑'} ${move.chinese}：` +
-        `损失 ${move.loss}cp（${LABEL_NAMES[move.label]}），推荐 ${move.bestChinese}`,
+        `丢分 ${move.loss.toFixed(1)}（${LABEL_NAMES[move.label]}），推荐 ${move.bestChinese}`,
     );
     if (move.pvChinese) console.log(`    变化：${move.pvChinese}`);
   }
   console.log(
-    `汇总：失误 ${report.mistakes}，漏着 ${report.blunders}，平均损失 ${report.acpl}cp`,
+    `汇总：失误 ${report.mistakes}，漏着 ${report.blunders}，平均丢分 ${report.avgLoss.toFixed(1)}`,
   );
   if (report.worst.length > 0) {
     console.log('重点改进：');
     for (const move of report.worst) {
       console.log(
-        `  第 ${move.ply} 手 ${move.chinese} → ${move.bestChinese}（损失 ${move.loss}cp）`,
+        `  第 ${move.ply} 手 ${move.chinese} → ${move.bestChinese}（丢分 ${move.loss.toFixed(1)}）`,
       );
     }
   }

@@ -1,11 +1,24 @@
-import { app, BrowserWindow, ipcMain, screen } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, screen } from 'electron';
+import type { OpenDialogOptions, SaveDialogOptions } from 'electron';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadConfig, type CliArgs } from '../src/config.ts';
 import { PikafishEngine, type SearchResult } from '../src/engine/pikafish.ts';
 import { INITIAL_FEN } from '../src/rules/board.ts';
 import { saveRecord } from '../src/storage/records.ts';
-import type { GameRecord } from '../src/storage/recordData.ts';
+import type { GameRecord, SavedGame } from '../src/storage/recordData.ts';
+import {
+  archiveFileName,
+  listArchives,
+  loadArchive,
+  readArchiveFile,
+  saveArchive,
+  writeArchiveFile,
+} from '../src/storage/archive.ts';
+import { loadSettings, saveSettings } from '../src/storage/settings.ts';
+
+const userDataOverride = process.env.XIANGQI_USER_DATA;
+if (userDataOverride) app.setPath('userData', userDataOverride);
 
 interface EngineStatus {
   ready: boolean;
@@ -166,6 +179,73 @@ function registerIpc(): void {
     mkdirSync(dir, { recursive: true });
     return dir;
   });
+
+  ipcMain.handle('archive:save', (_event, raw: unknown) =>
+    saveArchive(raw as SavedGame, archiveDir()),
+  );
+
+  ipcMain.handle('archive:list', () => listArchives(archiveDir()));
+
+  ipcMain.handle('archive:load', (_event, file: unknown) => {
+    if (typeof file !== 'string') throw new Error('无效的存档文件名');
+    return loadArchive(file, archiveDir());
+  });
+
+  ipcMain.handle('archive:export', async (event, raw: unknown) => {
+    const archive = raw as SavedGame;
+    if (smokeMode) {
+      const file = join(app.getPath('userData'), 'smoke-export.json');
+      writeArchiveFile(file, archive);
+      return file;
+    }
+
+    const options: SaveDialogOptions = {
+      title: '导出对局',
+      defaultPath: join(app.getPath('documents'), `xiangqi-${archiveFileName()}`),
+      filters: [{ name: '棋谱 JSON', extensions: ['json'] }],
+    };
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = win
+      ? await dialog.showSaveDialog(win, options)
+      : await dialog.showSaveDialog(options);
+    if (result.canceled || !result.filePath) return null;
+    writeArchiveFile(result.filePath, archive);
+    return result.filePath;
+  });
+
+  ipcMain.handle('archive:import', async (event) => {
+    if (smokeMode) {
+      const file = join(app.getPath('userData'), 'smoke-export.json');
+      return { path: file, archive: readArchiveFile(file) };
+    }
+
+    const options: OpenDialogOptions = {
+      title: '从文件载入对局',
+      filters: [{ name: '棋谱 JSON', extensions: ['json'] }],
+      properties: ['openFile'],
+    };
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = win
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options);
+    if (result.canceled || result.filePaths.length === 0) return null;
+    const file = result.filePaths[0];
+    return { path: file, archive: readArchiveFile(file) };
+  });
+
+  ipcMain.handle('settings:get', () => loadSettings(settingsPath()));
+
+  ipcMain.handle('settings:save', (_event, raw: unknown) =>
+    saveSettings(settingsPath(), raw),
+  );
+}
+
+function archiveDir(): string {
+  return join(app.getPath('userData'), 'saved');
+}
+
+function settingsPath(): string {
+  return join(app.getPath('userData'), 'settings.json');
 }
 
 function createWindow(): void {

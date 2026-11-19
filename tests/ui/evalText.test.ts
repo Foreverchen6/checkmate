@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  cpLoss,
   formatEval,
   formatEvalDetail,
   redCpOf,
@@ -19,32 +18,26 @@ describe('实时评估文本', () => {
     expect(redMateOf(null, 'black')).toBeNull();
   });
 
-  it('计算走子方损失并归一为非负值', () => {
-    expect(cpLoss(30, 10, 'red')).toBe(20);
-    expect(cpLoss(-30, -10, 'black')).toBe(20);
-    expect(cpLoss(10, 30, 'red')).toBe(0);
-    expect(cpLoss(-10, -30, 'black')).toBe(0);
+  it('显示总分为 200 的双方分数', () => {
+    expect(formatEval(0)).toBe('红 100.0 · 黑 100.0');
+    expect(formatEval(500)).toBe('红 117.3 · 黑 82.7');
+    expect(formatEval(-120)).toBe('红 95.8 · 黑 104.2');
   });
 
-  it('显示双方分数', () => {
-    expect(formatEval(0)).toBe('均势');
-    expect(formatEval(8)).toBe('均势');
-    expect(formatEval(40)).toBe('红+0.4 黑-0.4');
-    expect(formatEval(-120)).toBe('红-1.2 黑+1.2');
-  });
-
-  it('显示将杀信息', () => {
-    expect(formatEval(99800, 3)).toBe('红杀3');
-    expect(formatEval(-99800, -2)).toBe('黑杀2');
+  it('将杀时显示满分为一方所有', () => {
+    expect(formatEval(99800, 3)).toBe('红 200 · 黑 0');
+    expect(formatEval(-99800, -2)).toBe('红 0 · 黑 200');
   });
 
   it('详细文本同时包含双方分数与节点数', () => {
     expect(formatEvalDetail(40, null, 120000)).toBe(
-      '红方 +0.40 · 黑方 -0.40 · 引擎 120000 节点',
+      '红 101.4 · 黑 98.6 · 红方 +0.40 · 黑方 -0.40 · 引擎 120000 节点',
     );
     expect(formatEvalDetail(-45, null, 120000)).toBe(
-      '红方 -0.45 · 黑方 +0.45 · 引擎 120000 节点',
+      '红 98.4 · 黑 101.6 · 红方 -0.45 · 黑方 +0.45 · 引擎 120000 节点',
     );
-    expect(formatEvalDetail(0, 3, 120000)).toBe('红杀3 · 引擎 120000 节点');
+    expect(formatEvalDetail(0, 3, 120000)).toBe(
+      '红 200 · 黑 0 · 红杀3 · 引擎 120000 节点',
+    );
   });
 });

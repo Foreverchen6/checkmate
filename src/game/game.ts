@@ -35,6 +35,12 @@ export class Game {
     return this.entries;
   }
 
+  clone(): Game {
+    const copy = new Game(this.initialFen);
+    for (const entry of this.entries) copy.move(entry.move);
+    return copy;
+  }
+
   legalMoves(): Move[] {
     return generateLegalMoves(this.position);
   }

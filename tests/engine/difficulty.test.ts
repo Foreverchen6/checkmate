@@ -17,9 +17,9 @@ function result(cp: number, file: number): SearchResult {
 
 describe('难度与选着', () => {
   it('三档难度参数固定', () => {
-    expect(DIFFICULTIES[1]).toMatchObject({ name: 'beginner', nodes: 2000, multiPv: 3 });
-    expect(DIFFICULTIES[2]).toMatchObject({ name: 'entry', nodes: 20000, multiPv: 1 });
-    expect(DIFFICULTIES[3]).toMatchObject({ name: 'intermediate', nodes: 200000, multiPv: 1 });
+    expect(DIFFICULTIES[1]).toMatchObject({ name: 'beginner', nodes: 1000, multiPv: 4 });
+    expect(DIFFICULTIES[2]).toMatchObject({ name: 'entry', nodes: 5000, multiPv: 3 });
+    expect(DIFFICULTIES[3]).toMatchObject({ name: 'intermediate', nodes: 40000, multiPv: 1 });
   });
 
   it('非新手档直接选最佳着法', () => {

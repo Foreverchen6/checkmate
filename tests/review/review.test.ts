@@ -3,17 +3,18 @@ import { Game } from '../../src/game/game.ts';
 import { PikafishEngine } from '../../src/engine/pikafish.ts';
 import { loadConfig, parseArgs } from '../../src/config.ts';
 import { parseUciMove } from '../../src/notation/coords.ts';
-import { labelForLoss, reviewGame } from '../../src/review/review.ts';
+import { reviewGame } from '../../src/review/review.ts';
+import { labelForLoss } from '../../src/scoring.ts';
 
 describe('复盘分级', () => {
-  it('按 cp 损失分级', () => {
+  it('按丢分分级', () => {
     expect(labelForLoss(0)).toBe('good');
-    expect(labelForLoss(19)).toBe('good');
-    expect(labelForLoss(20)).toBe('ok');
-    expect(labelForLoss(49)).toBe('ok');
-    expect(labelForLoss(50)).toBe('mistake');
-    expect(labelForLoss(149)).toBe('mistake');
-    expect(labelForLoss(150)).toBe('blunder');
+    expect(labelForLoss(2.9)).toBe('good');
+    expect(labelForLoss(3)).toBe('ok');
+    expect(labelForLoss(7.9)).toBe('ok');
+    expect(labelForLoss(8)).toBe('mistake');
+    expect(labelForLoss(19.9)).toBe('mistake');
+    expect(labelForLoss(20)).toBe('blunder');
   });
 });
 
@@ -32,7 +33,7 @@ describe('真实引擎复盘', () => {
 
         const report = await reviewGame(engine, game, 'red', 2000);
         expect(report.moves).toHaveLength(2);
-        expect(report.acpl).toBeGreaterThanOrEqual(0);
+        expect(report.avgLoss).toBeGreaterThanOrEqual(0);
         expect(report.worst.length).toBeLessThanOrEqual(3);
 
         for (const move of report.moves) {

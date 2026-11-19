@@ -5,6 +5,7 @@ import { toFen } from '../rules/board.ts';
 import { applyMove } from '../rules/moves.ts';
 import { chineseNotation } from '../notation/chinese.ts';
 import { toUciMove } from '../notation/coords.ts';
+import { BLUNDER_LOSS, labelForLoss, lossBetween, type MoveLabel } from '../scoring.ts';
 
 export interface Searcher {
   search(
@@ -14,8 +15,6 @@ export interface Searcher {
     timeoutMs?: number,
   ): Promise<SearchResult[]>;
 }
-
-export type MoveLabel = 'good' | 'ok' | 'mistake' | 'blunder';
 
 export interface AnalyzedMove {
   ply: number;
@@ -33,15 +32,8 @@ export interface ReviewReport {
   moves: AnalyzedMove[];
   mistakes: number;
   blunders: number;
-  acpl: number;
+  avgLoss: number;
   worst: AnalyzedMove[];
-}
-
-export function labelForLoss(loss: number): MoveLabel {
-  if (loss < 20) return 'good';
-  if (loss < 50) return 'ok';
-  if (loss < 150) return 'mistake';
-  return 'blunder';
 }
 
 function pvToChinese(start: Position, pv: Move[]): string {
@@ -78,13 +70,13 @@ export async function reviewGame(
 
     const bestCp = best.cp;
     const actualCp = -afterResult.cp;
-    let loss = Math.max(0, bestCp - actualCp);
+    let loss = lossBetween(bestCp, actualCp);
     let label = labelForLoss(loss);
 
     const bestIsMate = best.mateIn !== null && best.mateIn > 0;
     const actualAllowsMate = afterResult.mateIn !== null && afterResult.mateIn > 0;
     if ((bestIsMate && actualCp < 90000) || actualAllowsMate) {
-      loss = Math.max(loss, 150);
+      loss = Math.max(loss, BLUNDER_LOSS);
       label = 'blunder';
     }
 
@@ -104,12 +96,10 @@ export async function reviewGame(
 
   const mistakes = analyzed.filter((move) => move.label === 'mistake').length;
   const blunders = analyzed.filter((move) => move.label === 'blunder').length;
-  const acpl = analyzed.length
-    ? Math.round(
-        analyzed.reduce((sum, move) => sum + move.loss, 0) / analyzed.length,
-      )
+  const avgLoss = analyzed.length
+    ? analyzed.reduce((sum, move) => sum + move.loss, 0) / analyzed.length
     : 0;
   const worst = [...analyzed].sort((a, b) => b.loss - a.loss).slice(0, 3);
 
-  return { moves: analyzed, mistakes, blunders, acpl, worst };
+  return { moves: analyzed, mistakes, blunders, avgLoss, worst };
 }

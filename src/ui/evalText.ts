@@ -1,4 +1,5 @@
 import type { Side } from '../types.ts';
+import { allocationOf } from '../scoring.ts';
 
 export function redCpOf(cp: number, side: Side): number {
   return side === 'red' ? cp : -cp;
@@ -9,19 +10,12 @@ export function redMateOf(mateIn: number | null, side: Side): number | null {
   return side === 'red' ? mateIn : -mateIn;
 }
 
-export function cpLoss(beforeRed: number, afterRed: number, mover: Side): number {
-  const before = mover === 'red' ? beforeRed : -beforeRed;
-  const after = mover === 'red' ? afterRed : -afterRed;
-  return Math.max(0, before - after);
-}
-
 export function formatEval(redCp: number, redMate: number | null = null): string {
   if (redMate !== null) {
-    return `${redMate > 0 ? '红' : '黑'}杀${Math.abs(redMate)}`;
+    return redMate > 0 ? '红 200 · 黑 0' : '红 0 · 黑 200';
   }
-  if (Math.abs(redCp) < 15) return '均势';
-  const points = (Math.abs(redCp) / 100).toFixed(1);
-  return redCp > 0 ? `红+${points} 黑-${points}` : `红-${points} 黑+${points}`;
+  const { red, black } = allocationOf(redCp);
+  return `红 ${red.toFixed(1)} · 黑 ${black.toFixed(1)}`;
 }
 
 export function formatEvalDetail(
@@ -31,7 +25,7 @@ export function formatEvalDetail(
 ): string {
   const head =
     redMate !== null
-      ? `${formatEval(redCp, redMate)}`
+      ? `${redMate > 0 ? '红' : '黑'}杀${Math.abs(redMate)}`
       : `红方 ${redCp >= 0 ? '+' : ''}${(redCp / 100).toFixed(2)} · 黑方 ${-redCp >= 0 ? '+' : ''}${(-redCp / 100).toFixed(2)}`;
-  return `${head} · 引擎 ${nodes} 节点`;
+  return `${formatEval(redCp, redMate)} · ${head} · 引擎 ${nodes} 节点`;
 }

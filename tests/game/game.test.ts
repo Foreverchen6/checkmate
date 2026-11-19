@@ -71,4 +71,25 @@ describe('对局状态机', () => {
     const game = new Game(INITIAL_FEN);
     expect(game.fen()).toBe(INITIAL_FEN);
   });
+
+  it('克隆对局与原对局互不影响', () => {
+    const game = new Game();
+    play(game, 'h2e2');
+    play(game, 'h9g7');
+    const fen = game.fen();
+
+    const copy = game.clone();
+    expect(copy.fen()).toBe(fen);
+    expect(copy.history).toHaveLength(2);
+    expect(copy.initialFen).toBe(game.initialFen);
+
+    play(copy, 'b0c2');
+    expect(copy.history).toHaveLength(3);
+    expect(game.history).toHaveLength(2);
+    expect(game.fen()).toBe(fen);
+
+    copy.undo(1);
+    expect(copy.history).toHaveLength(2);
+    expect(game.history).toHaveLength(2);
+  });
 });
