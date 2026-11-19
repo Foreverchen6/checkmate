@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;"
+    />
+    <title>Xiangqi</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <section class="board-pane">
+        <div class="board-wrap">
+          <svg
+            id="board"
+            viewBox="0 0 800 890"
+            preserveAspectRatio="xMidYMid meet"
+            role="img"
+            aria-label="中国象棋棋盘"
+          ></svg>
+        </div>
+        <div class="statusbar">
+          <div class="status-main">
+            <span id="turn" class="turn red">红方行棋</span>
+            <span id="eval" class="eval">
+              <span id="eval-score">评估中</span><span id="eval-quality" class="quality"></span>
+            </span>
+            <span class="spacer"></span>
+            <span id="engine" class="engine">启动中</span>
+            <button id="toggle-panel" class="icon" title="菜单">☰</button>
+          </div>
+          <p id="message" class="message">准备开始</p>
+        </div>
+      </section>
+
+      <aside class="controls">
+        <div class="row">
+          <select id="side" aria-label="我方">
+            <option value="red">红方</option>
+            <option value="black">黑方</option>
+          </select>
+          <select id="level" aria-label="难度">
+            <option value="1">入门</option>
+            <option value="2" selected>进阶</option>
+            <option value="3">高手</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <button id="new-game">新局</button>
+          <button id="undo">悔棋</button>
+          <button id="hint">提示</button>
+        </div>
+
+        <div class="row">
+          <button id="resign">认输</button>
+          <button id="review">复盘</button>
+          <button id="restart-engine" class="ghost" title="重启引擎">↻</button>
+          <button id="retry" class="ghost" hidden>重试</button>
+        </div>
+
+        <p id="record" class="record"></p>
+
+        <details id="moves-panel">
+          <summary>棋谱</summary>
+          <div id="move-list" class="move-list"></div>
+        </details>
+
+        <details id="review-panel">
+          <summary>复盘</summary>
+          <div id="review-body" class="review-body"></div>
+        </details>
+      </aside>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>

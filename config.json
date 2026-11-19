@@ -1,0 +1,6 @@
+{
+  "pikafishPath": "./Pikafish-Windows-x86-64-universal.exe",
+  "evalFile": "./pikafish.nnue",
+  "threads": 1,
+  "hashMb": 64
+}

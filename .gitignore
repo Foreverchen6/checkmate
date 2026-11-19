@@ -1,0 +1,13 @@
+# node 依赖与构建产物
+node_modules/
+dist-electron/
+dist-ui/
+release/
+records/
+.node-shim/
+
+# 非 Windows 引擎与分发压缩包（Windows 引擎与 NNUE 已随仓库提供）
+Pikafish-Android-arm64-universal
+Pikafish-Linux-x86-64-universal
+Pikafish-MacOS-universal
+Pikafish皮卡鱼20260925.zip

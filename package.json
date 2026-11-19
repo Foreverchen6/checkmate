@@ -1,0 +1,28 @@
+{
+  "name": "xiangqi-cli",
+  "productName": "Xiangqi",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist-electron/main.cjs",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/build.mjs",
+    "gui": "npm run build && electron .",
+    "package": "npm run build && node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "@types/node": "^24.0.0",
+    "electron": "^45.4.1",
+    "esbuild": "^0.25.0",
+    "playwright-core": "^1.65.1",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
