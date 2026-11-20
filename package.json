@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "build": "node scripts/build.mjs",
     "gui": "npm run build && electron .",
-    "package": "npm run build && node scripts/package.mjs"
+    "package": "npm run build && node scripts/package.mjs",
+    "smoke:online": "node scripts/online-smoke.mjs"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",
