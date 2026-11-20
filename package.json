@@ -24,5 +24,8 @@
     "playwright-core": "^1.65.1",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "localtunnel": "^2.0.2"
   }
 }
