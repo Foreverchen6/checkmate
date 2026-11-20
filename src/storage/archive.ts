@@ -18,6 +18,10 @@ const REASONS = new Set<EndReason>([
   'repetition',
   'resign',
   'aborted',
+  'timeout_step',
+  'timeout_total',
+  'disconnect',
+  'agreement',
 ]);
 const UCI_PATTERN = /^[a-i][0-9][a-i][0-9]$/;
 const MAX_MOVES = 1000;

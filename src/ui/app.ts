@@ -64,6 +64,10 @@ const REASON_TEXT: Record<EndReason, string> = {
   repetition: '三次重复',
   resign: '认输',
   aborted: '中止',
+  timeout_step: '单步超时',
+  timeout_total: '总时耗尽',
+  disconnect: '断线',
+  agreement: '和棋协议',
 };
 const LABEL_TEXT: Record<MoveLabel, string> = {
   good: '好棋',

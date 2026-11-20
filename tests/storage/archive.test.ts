@@ -130,4 +130,18 @@ describe('存档存储', () => {
   it('文件名包含日期与时间', () => {
     expect(archiveFileName(new Date(2026, 10, 19, 9, 5, 7))).toBe('20261119-090507.json');
   });
+
+  it('接受联机新增的结束原因', () => {
+    const cases = [
+      ['timeout_step', 'red_win'],
+      ['timeout_total', 'black_win'],
+      ['disconnect', 'red_win'],
+      ['agreement', 'draw'],
+    ] as const;
+    for (const [reason, result] of cases) {
+      const saved = sanitizeSavedGame({ ...sample(), result, endReason: reason });
+      expect(saved.endReason).toBe(reason);
+      expect(saved.result).toBe(result);
+    }
+  });
 });

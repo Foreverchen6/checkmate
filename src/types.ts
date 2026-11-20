@@ -31,7 +31,11 @@ export type EndReason =
   | 'move_limit'
   | 'repetition'
   | 'resign'
-  | 'aborted';
+  | 'aborted'
+  | 'timeout_step'
+  | 'timeout_total'
+  | 'disconnect'
+  | 'agreement';
 
 export type GameResult = 'red_win' | 'black_win' | 'draw' | 'aborted';
 
