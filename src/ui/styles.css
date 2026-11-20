@@ -34,7 +34,7 @@ body {
 
 .board-pane {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   height: 100%;
   padding: 2px 2px 0;
 }
@@ -697,4 +697,138 @@ details[open] summary::before {
 
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* ---------- online ---------- */
+
+.online-box {
+  max-width: 300px;
+  max-height: calc(100vh - 20px);
+  overflow-y: auto;
+}
+
+.online-tabs {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 6px;
+}
+
+.online-tabs button {
+  flex: 1;
+}
+
+.online-tabs button.active {
+  border-color: #4a4a52;
+  background: #202026;
+}
+
+.online-label {
+  display: block;
+  margin: 4px 0 2px;
+  color: var(--dim);
+  font-size: 9px;
+}
+
+#online-url,
+#online-join-url {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #141416;
+  color: var(--text);
+  font: inherit;
+  font-size: 10px;
+}
+
+#online-url:focus,
+#online-join-url:focus {
+  border-color: #3d3d44;
+  outline: none;
+}
+
+.online-state {
+  min-height: 14px;
+  margin: 4px 0;
+  color: #b9b9c0;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.online-request {
+  margin: 4px 0;
+  padding: 4px;
+  border: 1px solid #6b5328;
+  border-radius: 4px;
+  background: #241c0e;
+  font-size: 10px;
+}
+
+.online-game {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.online-clock {
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.online-pending {
+  margin: 4px 0;
+  padding: 4px;
+  border: 1px solid #3c3c46;
+  border-radius: 4px;
+  background: #17171b;
+  font-size: 10px;
+}
+
+.online-pending .row {
+  margin-top: 4px;
+}
+
+/* ---------- online info bar ---------- */
+
+/* 联机信息条插在 board-pane 首行；显式定位保证隐藏时棋盘仍占据 1fr 行。 */
+.board-pane > .online-bar {
+  grid-row: 1;
+}
+
+.board-pane > .board-wrap {
+  grid-row: 2;
+}
+
+.board-pane > .quick-actions {
+  grid-row: 3;
+}
+
+.board-pane > .statusbar {
+  grid-row: 4;
+}
+
+.online-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 4px;
+  padding: 3px 6px;
+  border: 1px solid #3c3c46;
+  border-radius: 4px;
+  background: #17171b;
+  color: #b9b9c0;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* .online-bar 的 display 会盖过 UA 的 [hidden]，这里显式恢复隐藏语义。 */
+.online-bar[hidden] {
+  display: none;
+}
+
+.online-bar-clock {
+  color: var(--text);
 }
