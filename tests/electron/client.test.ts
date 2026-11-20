@@ -487,7 +487,6 @@ describe('客人 HTTP 客户端（补充）', () => {
       expect(join?.headers.authorization).toBe(`Bearer ${TOKEN}`);
       expect(join?.headers.accept).toBe('application/json');
       expect(join?.headers['user-agent']).toBe('Xiangqi/0.1');
-      expect(join?.headers['bypass-tunnel-reminder']).toBe('true');
       expect(join?.headers['content-type']).toBe('application/json');
       expect(JSON.parse(join?.body ?? 'null')).toEqual({});
 

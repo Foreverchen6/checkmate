@@ -27,6 +27,6 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
-    "localtunnel": "^2.0.2"
+    "ssh2": "^1.17.0"
   }
 }

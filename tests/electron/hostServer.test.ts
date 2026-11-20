@@ -558,6 +558,17 @@ describe('房主本地 HTTP 服务补充覆盖', () => {
     }
   });
 
+  it('关闭宽限期内到达的请求仍收到 410 closed，宽限期结束后才释放端口', async () => {
+    const { server, port } = await approvedServer(async () => reply(true, null, snapshot(1)));
+    const closing = server.close(300);
+    // 关闭态已生效：宽限期内落地的请求不应被拒连，而应拿到 410。
+    const late = await get(port, '/xq/v1/poll?rev=1');
+    expect(late.status).toBe(410);
+    expect(late.body).toMatchObject({ error: { code: 'closed' } });
+    await closing;
+    await expect(get(port, '/xq/v1/poll?rev=1')).rejects.toThrow();
+  });
+
   it('房主返回非法快照时返回 500 而不是 410', async () => {
     let calls = 0;
     const { server, port } = await approvedServer(async () => {

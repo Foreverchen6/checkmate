@@ -46,7 +46,7 @@
 |---|---|
 | 传输 | 内嵌内网穿透，分享 URL |
 | 穿透实现 | 纯 Node 实现，运行在 Electron 主进程内，不产生子进程 |
-| 依赖 | npm `localtunnel`（纯 JS 客户端，无子进程），由 esbuild 打进主进程包 |
+| 依赖 | npm `ssh2`（纯 JS SSH 客户端，无子进程）+ pinggy 公共 SSH 中继，由 esbuild 打进主进程包 |
 | 对局协议 | HTTP 长轮询 + 全量快照 + 单调 revision |
 | 权威方 | 房主渲染进程：棋局、棋钟、请求裁决全部在房主侧 |
 | 主进程职责 | HTTP 服务、穿透、长轮询、存活检测、生命周期清理；不含棋规 |
@@ -68,12 +68,12 @@
 │  │ Game + 棋钟 + 请求裁决 │◄───────►│ 会话状态机          │  │
 │  │ OnlineGame 控制器     │ host-   │ 127.0.0.1 HTTP 服务 │  │
 │  │ UI（棋盘/棋钟/面板）   │ snapshot│ 长轮询队列          │  │
-│  └──────────────────────┘         │ localtunnel 客户端   │  │
+│  └──────────────────────┘         │ pinggy SSH 客户端    │  │
 │                                   └─────────┬──────────┘  │
 └─────────────────────────────────────────────┼─────────────┘
                                               │ 出站 TCP/TLS
                                     ┌─────────▼──────────┐
-                                    │ localtunnel 公共服务 │
+                                    │ pinggy 公共 SSH 中继 │
                                     └─────────┬──────────┘
                                               │ HTTPS
 ┌──────────────────────── 客人电脑 ───────────┼─────────────┐
@@ -100,7 +100,7 @@
 | `src/net/onlineGame.ts` | 房主权威控制器：包住 `Game`、棋钟、每手棋钟快照、pending 请求、revision |
 | `src/net/snapshotGame.ts` | 由快照重建客人侧 `Game`，生成中文记谱 |
 | `electron/online/hostServer.ts` | 本地 HTTP 服务、令牌校验、单客会话、长轮询队列、心跳时间戳 |
-| `electron/online/tunnel.ts` | `localtunnel` 封装：启动、URL、幂等关闭、异常回调 |
+| `electron/online/tunnel.ts` | pinggy SSH 穿透封装：建链、抓取公网 URL 并自检、幂等关闭、异常回调 |
 | `electron/online/client.ts` | 客人 HTTP 客户端：join、poll、ping、action、重试与关闭 |
 | `electron/online/session.ts` | 主进程会话状态机与 IPC 桥接；所有清理钩子都调用它的幂等 `stop()` |
 | `electron/online/ipc.ts` | 注册 `online:*` IPC，校验来自渲染进程的参数 |
@@ -117,7 +117,7 @@
 
 - 令牌：`crypto.randomBytes(32).toString('base64url')`，43 个字符，256 位熵。
 - URL：`${tunnel.url}/#${token}`。
-- 令牌放在 fragment：浏览器与 localtunnel 服务端都不会把 fragment 发送到服务器，只有粘贴到本软件后由主进程解析。
+- 令牌放在 fragment：浏览器与穿透中继都不会把 fragment 发送到服务器，只有粘贴到本软件后由主进程解析。
 - 令牌只保存在主进程内存；不写入设置、日志、棋谱。
 - 客人加入时把令牌放入 `Authorization: Bearer <token>`。
 - 接受格式：
@@ -141,7 +141,7 @@
 - 令牌比较使用 `crypto.timingSafeEqual`。
 - 单客：令牌对应唯一会话；同一时间只允许一个已批准的客人。
 - 简单令牌桶限流：每令牌 20 请求/秒，超出 429。
-- 客人客户端统一发送 `User-Agent: Xiangqi/0.1`、`Accept: application/json`、`Bypass-Tunnel-Reminder: true`，避免 localtunnel 的浏览器提醒页拦截 API 请求。
+- 客人客户端统一发送 `User-Agent: Xiangqi/0.1`、`Accept: application/json`；pinggy 不注入浏览器提醒页，API 请求直达房主服务。
 - 不返回 HTML，不提供静态文件，不接受任意路径参数。
 
 ### 6.3 会话与重连
@@ -287,7 +287,7 @@ interface OnlineSnapshot {
 ### 11.1 结构保证
 
 - 不调用 `child_process`、`spawn`、`exec`、`fork`、`worker_threads` 启动任何外部穿透程序。
-- `localtunnel` 是普通 npm 库，在主进程内用 TCP/TLS 套接字工作；没有可被“遗留”的进程。
+- `ssh2` 是纯 JS 库，在主进程内用一条 SSH TCP/TLS 套接字工作；没有可被“遗留”的进程。关闭即 `conn.end()`，卡住时 2 秒后 `conn.destroy()`。
 - 穿透连接、HTTP 服务、计时器、待决轮询全部由一个会话对象持有。
 
 ### 11.2 幂等 stop
@@ -303,10 +303,11 @@ interface OnlineSession {
 1. 标记会话结束，拒绝新的 IPC/HTTP 请求；
 2. 清除心跳、离线检测、自动关闭等所有定时器；
 3. 结束所有挂起的长轮询（返回 410/204）；
-4. `server.closeAllConnections()` 后 `server.close()`；
-5. `tunnel.close()`（内部关闭所有套接字）；
-6. 通知渲染进程会话已结束；
-7. 置空引用，释放端口。
+4. 有客人时保留监听 1.5 秒宽限期：客人的长轮询可能还在穿透中继路上，宽限期内落地的请求一律回 `410 closed`，避免被掐断后客人把“房主结束”误判成断网去重连两分钟；
+5. 宽限期结束后 `server.closeAllConnections()` 并 `server.close()`，再给中继留 0.5 秒转发窗口；
+6. `tunnel.close()`（内部关闭所有套接字）；
+7. 通知渲染进程会话已结束；
+8. 置空引用，释放端口。
 
 每一步用 `try/catch` 包裹并记录非敏感日志；任一步失败不阻止后续步骤。
 
@@ -370,7 +371,7 @@ app.on('before-quit', (event) => {
 
 ### 12.4 信任与隐私
 
-- 穿透服务（localtunnel 公共服务）可见转发的明文 HTTP 内容：棋步、令牌、房间状态。
+- 穿透服务（pinggy 公共中继）可见转发的明文 HTTP 内容：棋步、令牌、房间状态。
 - 邀请令牌不在 HTTP 请求路径或查询串中，避免被穿透服务日志记录；但加入后仍在请求头中出现。
 - 不传输任何个人身份信息；不保存远端地址。
 - 房主拥有完全权威，理论上可使用外部引擎作弊；v1 不防作弊，仅关闭软件内引擎功能。
@@ -583,7 +584,7 @@ type OnlineEvent =
   | { type: 'closed'; reason: string };
 ```
 
-- `localUrl` 仅在 `XIANGQI_ONLINE_SMOKE_LOCAL=1` 时返回，供冒烟测试绕过公网穿透；该模式下跳过 localtunnel，只启动 `127.0.0.1` 服务。正常运行时 `localUrl` 为 `undefined`，真实穿透路径不受影响。
+- `localUrl` 仅在 `XIANGQI_ONLINE_SMOKE_LOCAL=1` 时返回，供冒烟测试绕过公网穿透；该模式下跳过穿透，只启动 `127.0.0.1` 服务。正常运行时 `localUrl` 为 `undefined`，真实穿透路径不受影响。
 - 所有 IPC 入参在主进程重新校验；渲染进程不可信值不直接进入网络或文件。
 
 ## 15. 错误处理
@@ -646,7 +647,7 @@ type OnlineEvent =
 ### 16.3 真实穿透集成（可选，需显式开启）
 
 - 设置 `XIANGQI_ONLINE_TUNNEL=1` 时运行 `tests/electron/tunnel.live.test.ts`：
-  - 启动本机 HTTP 服务 → 建立真实 localtunnel → 通过公网 URL 请求 `/xq/v1/...`
+  - 启动本机 HTTP 服务 → 建立真实 pinggy 隧道 → 通过公网 URL 请求 `/xq/v1/...`（未加入时预期 403 busy，证明请求已打到房主服务）
   - 关闭 → 5 秒内 URL 不可用、端口释放
 - 默认 `npm test` 不启用，避免公网抖动导致失败；发布前至少手动跑一次。
 - 回环测试中的隧道替换只用于确定性地验证清理路径，真实依赖由本节与手动验收覆盖，不构成“桩引擎”式的功能降级。
@@ -681,20 +682,20 @@ type OnlineEvent =
 
 ## 17. 依赖与构建
 
-- 新增运行时依赖：`localtunnel`（固定到 `^2.0.2`），仅主进程使用；启动参数为 `{ port, local_host: '127.0.0.1' }`。
-- `scripts/build.mjs` 已对主进程 `bundle: true`，`localtunnel` 及其依赖会被打进 `dist-electron/main.cjs`；`external` 仍只有 `electron`。
-- 为 `localtunnel` 增加本地类型声明 `src/net/localtunnel.d.ts`（该包不自带类型）。
+- 运行时依赖：`ssh2`（`^1.17.0`），仅主进程使用；每次创建房间生成一次性 RSA 2048 密钥，连接 `a.pinggy.io:443`，`forwardIn('localhost', 0)` 申请远端端口。
+- `scripts/build.mjs` 对主进程 `bundle: true`，`ssh2` 及纯 JS 依赖打进 `dist-electron/main.cjs`；`external` 增加可选原生模块 `cpu-features` 与 `*.node`，运行时缺失会被 ssh2 自身的 try/catch 忽略。
+- 为 `ssh2` 增加本地最小类型声明 `electron/online/ssh2.d.ts`（该包不自带类型）。
 - 打包脚本无需新增资源文件；不复制 `node_modules`。
 - 首次实现时验证：`npm run build` 无动态 require 警告、打包版能启动穿透并正常关闭。
 - 不引入 WebSocket、数据库、原生模块。
 
 ## 18. 风险与取舍
 
-- **localtunnel 公共服务可用性**：依赖第三方中继，网络受限或服务抖动时联机不可用；失败时明确报错，不做静默降级。v1 不接受自建中继的额外部署成本。
+- **pinggy 公共服务可用性**：依赖第三方中继，网络受限或服务抖动时联机不可用；失败时明确报错，不做静默降级。免费隧道约 60 分钟到期，到期按“穿透连接已关闭”结束会话并提示。v1 不接受自建中继的额外部署成本。
 - **第三方可见流量**：穿透服务可观察明文棋步与令牌；不传个人数据，令牌不落盘。端到端加密留待以后。
 - **长轮询延迟**：正常情况下百毫秒级；极端网络下棋钟以房主为准，客人显示可能有轻微偏差，收到快照即校正。
 - **房主权威即信任房主**：房主可篡改结果或使用外部引擎；v1 不做仲裁与防作弊。
-- **`localtunnel` 打包兼容性**：依赖较老但在 Node 24 下为纯 JS；实现时先做一次真实隧道验证，若 esbuild 打包出现问题，则在 `tunnel.ts` 中使用 `createRequire` 加载并调整打包配置，仍不引入子进程。
+- **pinggy 地址解析**：公网 URL 由 pinggy 在 SSH 会话输出中下发，`tunnel.ts` 做 ANSI 清洗、滚动缓冲与候选自检（未带令牌的 `/xq/v1/poll` 返回 401 JSON 才采用），避免误用终端里的其它链接。
 - **断线判负**：2 分钟窗口内恢复不扣时；这对双方一致，但可能被恶意断线用来暂停棋钟，超时即判负作为约束。
 - **UI 体量**：窗口较小，联机面板采用可滚动模态框与常驻信息条，避免挤压棋盘。
 

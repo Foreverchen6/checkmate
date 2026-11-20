@@ -241,7 +241,6 @@ export class GuestClient {
           authorization: `Bearer ${this.token}`,
           accept: 'application/json',
           'user-agent': 'Xiangqi/0.1',
-          'bypass-tunnel-reminder': 'true',
           ...(body === undefined ? {} : { 'content-type': 'application/json' }),
         },
         body: body === undefined ? undefined : JSON.stringify(body),

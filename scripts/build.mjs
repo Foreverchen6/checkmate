@@ -13,7 +13,7 @@ await build({
   platform: 'node',
   format: 'cjs',
   target: 'node22',
-  external: ['electron'],
+  external: ['electron', 'cpu-features', '*.node'],
   sourcemap: false,
   logLevel: 'info',
 });

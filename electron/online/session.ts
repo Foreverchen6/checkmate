@@ -14,7 +14,12 @@ import {
 } from '../../src/net/protocol.ts';
 import { GuestClient, GuestHttpError, type GuestLinkStatus } from './client.ts';
 import { HostServer } from './hostServer.ts';
-import { localTunnelFactory, type TunnelFactory, type TunnelHandle } from './tunnel.ts';
+import { pinggyTunnelFactory, type TunnelFactory, type TunnelHandle } from './tunnel.ts';
+
+/** 关闭后保留监听的宽限期：让穿透中继途中的长轮询落地并收到 410。 */
+const CLOSE_GRACE_MS = 1_500;
+/** 宽限期结束后再给公网中继留出的转发窗口，避免最后一条 410 被 SSH 断开截断。 */
+const TUNNEL_FLUSH_MS = 500;
 
 type EventSink = (event: OnlineEvent) => void;
 
@@ -127,7 +132,7 @@ export class HostOnlineSession implements OnlineSession {
         localUrl = `http://127.0.0.1:${port}`;
         inviteUrl = `${localUrl}/#${token}`;
       } else {
-        tunnel = await (options.tunnelFactory ?? localTunnelFactory).open(port);
+        tunnel = await (options.tunnelFactory ?? pinggyTunnelFactory).open(port);
         inviteUrl = `${tunnel.url.replace(/\/+$/, '')}/#${token}`;
       }
 
@@ -235,18 +240,23 @@ export class HostOnlineSession implements OnlineSession {
       pending.resolve({ accepted: false, message: '房间已关闭', snapshot: null });
     }
     this.pendingActions.clear();
-    // 先同步释放穿透，避免 HTTP 服务关闭迟迟不完成时公网隧道仍可访问。
+    // 先关闭本地服务：它会把 410 写给挂起的长轮询并冲刷响应（内部有 200ms 强制断连兜底）。
+    // 客人此刻可能还有请求在穿透中继路上，因此关闭后保留一小段监听宽限期，
+    // 让这些请求落地后拿到 410，而不是被掐断后让客人误判断网去重连两分钟。
+    // 隧道随后再关，且给公网中继留出转发窗口，否则 410 会在送达客人前被 SSH 断开截断。
+    const hadGuest = this.server.status.guestPresent;
+    try {
+      await this.server.close(hadGuest ? CLOSE_GRACE_MS : 0);
+    } catch {
+      // 服务已关闭时继续释放穿透。
+    }
     if (this.tunnel) {
+      if (hadGuest) await new Promise((resolve) => setTimeout(resolve, TUNNEL_FLUSH_MS));
       try {
         this.tunnel.close();
       } catch {
-        // 穿透已关闭时继续关闭本地服务。
+        // 穿透已关闭时继续通知渲染进程。
       }
-    }
-    try {
-      await this.server.close();
-    } catch {
-      // 服务已关闭时继续通知渲染进程。
     }
     this.emitClosed(reason);
   }

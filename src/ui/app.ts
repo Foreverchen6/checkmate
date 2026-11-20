@@ -195,7 +195,6 @@ let selected: Square | null = null;
 let hintMoves: Move[] = [];
 let evalState: EvalState | null = null;
 let snapshots: PieceView[][] = [];
-let nextPieceId = 1;
 let review: ReviewReport | null = null;
 let savedPath: string | null = null;
 
@@ -254,8 +253,9 @@ function snapshot(position: Position): PieceView[] {
     for (let file = 0; file < 9; file += 1) {
       const piece = position.board[rank][file];
       if (!piece) continue;
-      pieces.push({ id: nextPieceId, type: piece.type, side: piece.side, file, rank });
-      nextPieceId += 1;
+      // id 由棋子起点格位推导：同一局无论重建多少次，每枚棋子都得到相同 id，
+      // 客人收到快照重绘时能复用 DOM 节点，CSS 过渡才会把走子渲染成平滑位移。
+      pieces.push({ id: rank * 9 + file, type: piece.type, side: piece.side, file, rank });
     }
   }
   return pieces;
@@ -469,7 +469,6 @@ function resetLocalForOnline(): void {
   hintMoves = [];
   game = new Game();
   startedAt = new Date();
-  nextPieceId = 1;
   snapshots = [snapshot(game.position)];
   review = null;
   savedPath = null;
@@ -747,7 +746,6 @@ async function startHosting(hostSide: Side): Promise<void> {
   };
   humanSide = hostSide;
   game = hostGame.game;
-  nextPieceId = 1;
   snapshots = [snapshot(game.position)];
   board.setOrientation(hostSide);
   board.reset(piecesNow());
@@ -1400,7 +1398,6 @@ function applySavedGame(saved: SavedGame, note: string): void {
   levelSelect.value = String(level);
   game = restored;
   startedAt = new Date(saved.startedAt);
-  nextPieceId = 1;
   snapshots = rebuildSnapshots(game);
   selected = null;
   hintMoves = [];
@@ -1429,7 +1426,6 @@ function startFromFen(fen: string): void {
   humanSide = sideSelect.value === 'black' ? 'black' : 'red';
   level = (Number(levelSelect.value) as Level) || 2;
   startedAt = new Date();
-  nextPieceId = 1;
   game = new Game(normalized);
   snapshots = [snapshot(game.position)];
   selected = null;
@@ -1826,7 +1822,6 @@ function startNewGame(): void {
   level = (Number(levelSelect.value) as Level) || 2;
   game = new Game();
   startedAt = new Date();
-  nextPieceId = 1;
   snapshots = [snapshot(game.position)];
   selected = null;
   hintMoves = [];

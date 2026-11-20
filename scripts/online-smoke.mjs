@@ -11,7 +11,7 @@ const guestData = mkdtempSync(join(tmpdir(), 'xiangqi-online-guest-'));
 
 const baseEnv = { ...process.env };
 delete baseEnv.ELECTRON_RUN_AS_NODE;
-baseEnv.XIANGQI_ONLINE_SMOKE_LOCAL = '1';
+baseEnv.XIANGQI_ONLINE_SMOKE_LOCAL = process.env.XIANGQI_ONLINE_TUNNEL === '1' ? '0' : '1';
 
 const packagedExe = process.env.XIANGQI_EXE;
 const launch = (userData) =>
@@ -107,7 +107,7 @@ try {
   );
   const inviteLatency = Date.now() - createAt;
   const invite = await hostPage.locator('#online-url').inputValue();
-  if (!/^http:\/\/127\.0\.0\.1:\d+\/#[A-Za-z0-9_-]{43}$/.test(invite)) {
+  if (!/^https?:\/\/[^/]+\/#[A-Za-z0-9_-]{43}$/.test(invite)) {
     throw new Error(`邀请链接格式异常：${invite}`);
   }
   console.log('邀请链接：', invite);
@@ -245,9 +245,24 @@ try {
   await clickSquare(hostPage, 'red', 7, 2);
   await clickSquare(hostPage, 'red', 4, 2);
   await waitFor(async () => (await moveCount(guestPage)) === 1, '悔棋后房主再走子');
+  // 客人收到房主快照会重建棋局；棋子 DOM 节点必须按稳定 id 复用，
+  // 否则 CSS 位移过渡失效，客人侧走子会变成瞬移（房主侧一直是平滑的）。
+  await guestPage.evaluate(() => {
+    for (const node of document.querySelectorAll('.pieces [data-id]')) {
+      node.dataset.reuseMark = '1';
+    }
+  });
   await clickSquare(guestPage, 'black', 7, 7);
   await clickSquare(guestPage, 'black', 4, 7);
   await waitFor(async () => (await moveCount(hostPage)) === 2, '悔棋后客人再走子');
+  const reuse = await guestPage.evaluate(() => {
+    const nodes = [...document.querySelectorAll('.pieces [data-id]')];
+    return { total: nodes.length, reused: nodes.filter((n) => n.dataset.reuseMark === '1').length };
+  });
+  console.log('客人侧棋子节点复用：', JSON.stringify(reuse));
+  if (reuse.reused !== reuse.total) {
+    throw new Error(`客人侧棋子节点被重建，移动不会平滑：${JSON.stringify(reuse)}`);
+  }
   console.log('悔棋后重走步数：', await moveCount(hostPage), await moveCount(guestPage));
 
   await openOnline(guestPage);
@@ -278,23 +293,28 @@ try {
   await waitFor(
     () => guestPage.locator('#online-bar').isHidden(),
     '客人收到关闭',
+    15_000,
   );
 
   // 验收第 6 项：邀请地址随会话一起失效，结束后无可访问的本地服务。
-  // 端口服务已关闭时应为连接被拒（dead === 0）；能拿到 HTTP 状态说明仍在应答。
+  // 本地模式下连接直接被拒；真实穿透下应拿不到房主服务的 JSON 应答（可能是中继错误页或连接失败）。
   const base = invite.split('#')[0];
   const dead = await fetch(`${base}xq/v1/poll?rev=0`, {
     headers: {
       authorization: `Bearer ${invite.split('#')[1]}`,
-      'bypass-tunnel-reminder': 'true',
       'user-agent': 'Xiangqi/0.1',
     },
     signal: AbortSignal.timeout(3000),
   })
-    .then((response) => response.status)
-    .catch(() => 0);
-  console.log('结束后邀请地址探测（0=连接被拒，符合预期）：', dead);
-  if (dead !== 0) throw new Error(`结束后邀请地址仍可访问：${dead}`);
+    .then(async (response) => ({
+      status: response.status,
+      contentType: response.headers.get('content-type') ?? '',
+      body: await response.text(),
+    }))
+    .catch(() => null);
+  const stillServing = dead !== null && dead.body.includes('尚未获准加入');
+  console.log('结束后邀请地址探测（仍在应答房主服务=失败）：', JSON.stringify(dead));
+  if (stillServing) throw new Error(`结束后邀请地址仍可访问：${dead.status}`);
 
   const restored = await hostPage.evaluate(() => ({
     newGame: document.getElementById('new-game').disabled,

@@ -342,12 +342,17 @@ export class HostServer {
     }
   }
 
-  close(): Promise<void> {
-    if (!this.closePromise) this.closePromise = this.doClose();
+  /**
+   * @param graceMs 关闭后保留监听的时间。经过内网穿透时，客人的长轮询可能正处在
+   * 中继路上还没落到本地服务；先停监听会让它被掐断，客人只能当作断网而重连两分钟。
+   * 宽限期内监听器保持打开，`handle()` 会对所有到达的请求直接回 410 房间已关闭。
+   */
+  close(graceMs = 0): Promise<void> {
+    if (!this.closePromise) this.closePromise = this.doClose(graceMs);
     return this.closePromise;
   }
 
-  private async doClose(): Promise<void> {
+  private async doClose(graceMs: number): Promise<void> {
     this.closed = true;
     this.listening = false;
     if (this.livenessTimer) {
@@ -369,6 +374,14 @@ export class HostServer {
       sendJson(waiter.res, 410, closedBody, CONNECTION_CLOSE);
     }
     if (joinWaiter) sendJson(joinWaiter.res, 410, closedBody, CONNECTION_CLOSE);
+
+    if (graceMs > 0) {
+      // 关闭态已生效，监听器仍打开：宽限期内落地的请求由 handle() 直接回 410。
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, graceMs);
+        timer.unref?.();
+      });
+    }
 
     // 停止接受新连接；已在处理的请求仍可以完成并在结束后关闭。
     const stopped = new Promise<void>((resolve) => {
