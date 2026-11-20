@@ -16,6 +16,7 @@ import {
   writeArchiveFile,
 } from '../src/storage/archive.ts';
 import { loadSettings, saveSettings } from '../src/storage/settings.ts';
+import { OnlineController } from './online/ipc.ts';
 
 const userDataOverride = process.env.XIANGQI_USER_DATA;
 if (userDataOverride) app.setPath('userData', userDataOverride);
@@ -54,6 +55,20 @@ function serialize<T>(task: () => Promise<T>): Promise<T> {
   );
   return run;
 }
+
+const online = new OnlineController({
+  smokeLocal: process.env.XIANGQI_ONLINE_SMOKE_LOCAL === '1',
+  emit: (event) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (win.isDestroyed()) continue;
+      try {
+        win.webContents.send('online:event', event);
+      } catch {
+        // 窗口在发送前销毁时 send 会抛错：会话生命周期不能因此中断。
+      }
+    }
+  },
+});
 
 function resourceBase(): string {
   return app.isPackaged ? process.resourcesPath : app.getAppPath();
@@ -159,6 +174,7 @@ function registerIpc(): void {
 
   ipcMain.handle('engine:search', (_event, raw: unknown) =>
     serialize(async (): Promise<SearchResult[]> => {
+      if (online.isActive()) throw new Error('联机对局中不可使用引擎');
       const payload = parseSearchPayload(raw);
       const instance = await ensureEngine();
       return instance.search(payload.fen, payload.nodes, payload.multiPv, payload.timeoutMs);
@@ -238,6 +254,28 @@ function registerIpc(): void {
   ipcMain.handle('settings:save', (_event, raw: unknown) =>
     saveSettings(settingsPath(), raw),
   );
+
+  ipcMain.handle('online:host-start', (_event, side: unknown) => {
+    if (side !== 'red' && side !== 'black') throw new Error('无效的阵营');
+    return online.hostStart(side);
+  });
+  ipcMain.handle('online:host-stop', () => online.hostStop());
+  ipcMain.handle('online:host-decision', (_event, accept: unknown) => {
+    if (typeof accept !== 'boolean') throw new Error('无效的审批结果');
+    return online.hostDecision(accept);
+  });
+  ipcMain.handle('online:host-snapshot', (_event, snapshot: unknown) =>
+    online.hostSnapshot(snapshot),
+  );
+  ipcMain.handle(
+    'online:host-reply',
+    (_event, actionId: unknown, accepted: unknown, message: unknown, snapshot: unknown) =>
+      online.hostReply(actionId, accepted, message, snapshot),
+  );
+  ipcMain.handle('online:guest-join', (_event, url: unknown) => online.guestJoin(url));
+  ipcMain.handle('online:guest-action', (_event, action: unknown) => online.guestAction(action));
+  ipcMain.handle('online:guest-leave', () => online.guestLeave());
+  ipcMain.handle('online:status', () => online.status());
 }
 
 function archiveDir(): string {
@@ -276,6 +314,12 @@ function createWindow(): void {
   });
 
   win.removeMenu();
+  win.on('closed', () => {
+    void online.stop('window-closed').catch(() => undefined);
+  });
+  win.webContents.on('render-process-gone', () => {
+    void online.stop('render-gone').catch(() => undefined);
+  });
   if (smokeMode) win.once('ready-to-show', () => win.showInactive());
   else win.once('ready-to-show', () => win.show());
   void win.loadFile(join(app.getAppPath(), 'dist-ui', 'index.html'));
@@ -343,7 +387,27 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+let quitting = false;
+app.on('before-quit', (event) => {
+  if (quitting || !online.isActive()) return;
+  event.preventDefault();
+  quitting = true;
+  // 兜底计时器不拖住事件循环：unref，并在停止先完成时清掉。
+  let fallback: NodeJS.Timeout | null = null;
+  const timeout = new Promise<void>((resolve) => {
+    fallback = setTimeout(resolve, 3000);
+    fallback.unref();
+  });
+  void Promise.race([online.stop('app-quit'), timeout])
+    .catch(() => undefined)
+    .finally(() => {
+      if (fallback !== null) clearTimeout(fallback);
+      app.quit();
+    });
+});
+
 app.on('will-quit', () => {
+  void online.stop('will-quit').catch(() => undefined);
   engine?.kill();
   engine = null;
 });

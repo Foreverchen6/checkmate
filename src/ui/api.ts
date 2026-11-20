@@ -1,10 +1,19 @@
 import type { SearchResult } from '../engine/pikafish.ts';
 import type {
+  ActionReply,
+  GuestAction,
+  OnlineEvent,
+  OnlinePhase,
+  OnlineSnapshot,
+  OnlineStatus,
+} from '../net/protocol.ts';
+import type {
   ArchiveSummary,
   GameRecord,
   SavedGame,
 } from '../storage/recordData.ts';
 import type { AppSettings } from '../storage/settings.ts';
+import type { Side } from '../types.ts';
 
 export interface EngineStatus {
   ready: boolean;
@@ -25,6 +34,11 @@ export interface ImportedArchive {
   archive: SavedGame;
 }
 
+export interface OnlineStartResult {
+  url: string;
+  localUrl?: string;
+}
+
 export interface XiangqiApi {
   getStatus(): Promise<EngineStatus>;
   restartEngine(): Promise<EngineStatus>;
@@ -39,6 +53,21 @@ export interface XiangqiApi {
   getSettings(): Promise<AppSettings>;
   saveSettings(settings: AppSettings): Promise<AppSettings>;
   onEngineStatus(callback: (status: EngineStatus) => void): () => void;
+  hostStart(side: Side): Promise<OnlineStartResult>;
+  hostStop(): Promise<void>;
+  hostDecision(accept: boolean): Promise<void>;
+  hostSnapshot(snapshot: OnlineSnapshot): Promise<void>;
+  hostReply(
+    actionId: string,
+    accepted: boolean,
+    message: string | null,
+    snapshot: OnlineSnapshot,
+  ): Promise<void>;
+  guestJoin(url: string): Promise<{ phase: OnlinePhase }>;
+  guestAction(action: GuestAction): Promise<ActionReply>;
+  guestLeave(): Promise<void>;
+  getOnlineStatus(): Promise<OnlineStatus>;
+  onOnlineEvent(callback: (event: OnlineEvent) => void): () => void;
 }
 
 declare global {
